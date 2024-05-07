@@ -1,0 +1,106 @@
+static_resources:
+  listeners:
+  - name: listener_0
+    address:
+      socket_address:
+        address: 0.0.0.0
+        port_value: 8080
+    filter_chains:
+    - filters:
+      - name: envoy.filters.network.http_connection_manager
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+          stat_prefix: ingress_http
+          codec_type: auto
+          http_filters:
+          - name: envoy.filters.http.basic_auth
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.basic_auth.v3.BasicAuth
+              users:
+                inline_string: |-
+                  user1:{SHA}gDOn9V0X9nnuDN75+YQWeUdvRvk=
+                  user2:{SHA}gDOn9V0X9nnuDN75+YQWeUdvRvk=
+          - name: envoy.filters.http.ext_authz
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+              http_service:
+                server_uri:
+                  uri: http://opa:8181
+                  cluster: opa
+                  timeout: 0.5s
+                authorization_request:
+                  allowed_headers:
+                    patterns:
+                    - exact: "authorization"
+          - name: envoy.filters.http.router
+          route_config:
+            name: local_route
+            virtual_hosts:
+            - name: all_domains
+              domains: ["*"]
+              routes:
+              - match:
+                  prefix: "/webtop1"
+                route:
+                  cluster: webtop1
+              - match:
+                  prefix: "/webtop2"
+                route:
+                  cluster: webtop2
+            # - name: local_service
+            #   domains: ["*"]
+            #   routes:
+            #   - match:
+            #       safe_regex:
+            #         google_re2: {}
+            #         regex: "/([^/]+)/([^/]+)"
+            #     route:
+            #       cluster_header: "webtop-service"
+
+  clusters:
+  - name: webtop1
+    connect_timeout: 0.5s
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: webtop1
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: webtop1
+                port_value: 3000
+  - name: webtop2
+    connect_timeout: 0.5s
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: webtop2
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: webtop2
+                port_value: 3000
+  # - name: opa
+  #   connect_timeout: 0.5s
+  #   type: STRICT_DNS
+  #   lb_policy: ROUND_ROBIN
+  #   load_assignment:
+  #     cluster_name: opa
+  #     endpoints:
+  #     - lb_endpoints:
+  #       - endpoint:
+  #           address:
+  #             socket_address:
+  #               address: opa
+  #               port_value: 8181
+
+admin:
+  access_log_path: "/tmp/admin_access.log"
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: 8001
