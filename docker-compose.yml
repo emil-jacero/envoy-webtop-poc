@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  webtop1:
+    image: lscr.io/linuxserver/webtop:latest
+    restart: unless-stopped
+    ports:
+      - "10001:3000"
+    networks:
+      - internal
+    security_opt:
+      - seccomp:unconfined #optional
+    # devices:
+    #   - /dev/dri:/dev/dri #optional
+    shm_size: "1gb" #optional
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Stockholm
+      - SUBFOLDER=/webtop1/
+      - TITLE=Webtop
+    volumes:
+      - ./config:/config
+      - /var/run/docker.sock:/var/run/docker.sock #optional
+  webtop2:
+    image: lscr.io/linuxserver/webtop:latest
+    restart: unless-stopped
+    ports:
+      - "10002:3000"
+    networks:
+      - internal
+    security_opt:
+      - seccomp:unconfined #optional
+    # devices:
+    #   - /dev/dri:/dev/dri #optional
+    shm_size: "1gb" #optional
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Stockholm
+      - SUBFOLDER=/webtop2/
+      - TITLE=Webtop
+    volumes:
+      - ./config:/config
+      - /var/run/docker.sock:/var/run/docker.sock #optional
+
+  podinfo:
+    image: stefanprodan/podinfo:latest
+    ports:
+      - "9898:9898"
+    networks:
+      - internal
+
+  envoy:
+    image: envoyproxy/envoy:v1.30.1
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml
+    ports:
+      - "10000:10000"
+      - "9001:9001"
+    depends_on:
+      - webtop1
+      - webtop2
+      # - opa
+    networks:
+      - internal
+
+  # opa:
+  #   image: openpolicyagent/opa:latest
+  #   volumes:
+  #     - ./policy.rego:/policy/policy.rego
+  #   command: "run --server --addr=0.0.0.0:8181 /policy/policy.rego"
+  #   networks:
+  #     - internal
+
+networks:
+  internal:
+    driver: bridge
