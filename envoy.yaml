@@ -1,3 +1,10 @@
+admin:
+  access_log_path: "/tmp/admin_access.log"
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: 9001
+
 static_resources:
   listeners:
   - address:
@@ -9,7 +16,8 @@ static_resources:
       - name: envoy.filters.network.http_connection_manager
         typed_config:
           "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
-          stat_prefix: ingress_ws_to_ws
+          codec_type: AUTO
+          stat_prefix: ingress_http
           upgrade_configs:
           - upgrade_type: websocket
           route_config:
@@ -18,18 +26,97 @@ static_resources:
             - name: local_service
               domains: ["*"]
               routes:
-              # - match: { prefix: "/" }
-              #   route: { cluster: podinfo }
-              - match: { prefix: "/webtop1" }
-                route: { cluster: webtop1, prefix_rewrite: "/" }
-              - match: { path: "/webtop2" }
-                route: { cluster: webtop2, prefix_rewrite: "/" }
+              - match:
+                  prefix: "/login"
+                route:
+                  cluster: ext_authz-http-service
+                typed_per_filter_config:
+                  envoy.filters.http.ext_authz:
+                    "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                    disabled: true
+              # - match:
+              #     prefix: "/webtop1"
+              #   route:
+              #     cluster: webtop1
+              # - match:
+              #     prefix: "/webtop2"
+              #   route:
+              #     cluster: webtop2
+              - match:
+                  prefix: "/"
+                route:
+                  cluster: podinfo
           http_filters:
+          - name: envoy.filters.http.ext_authz.authn
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+              transport_api_version: V3
+              allowed_headers:
+                patterns:
+                  - exact: "x-current-user"
+                  - exact: "Location"
+              http_service:
+                server_uri:
+                  uri: http://authz:5000
+                  cluster: ext_authz-http-service
+                  timeout: 0.250s
+                authorization_response:
+                  allowed_upstream_headers:
+                    patterns:
+                    - exact: "Location"
+                    - exact: "x-current-user"
+                  allowed_client_headers:
+                    patterns:
+                    - exact: "Location"
+                    - exact: "x-current-user"
+                # authorization_response:
+                #   allowed_upstream_headers:
+                #     patterns:
+                #     - exact: x-current-user
+          # - name: envoy.filters.http.ext_authz.authz
+          #   typed_config:
+          #     "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+          #     grpc_service:
+          #       envoy_grpc:
+          #         cluster_name: ext_authz-opa-service
+          #       timeout: 0.250s
+          #     transport_api_version: V3
           - name: envoy.filters.http.router
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
 
   clusters:
+  - name: ext_authz-http-service
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: ext_authz-http-service
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: ext_authz-http-service
+                port_value: 5000
+
+  - name: ext_authz-opa-service
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http2_protocol_options: {}
+    load_assignment:
+      cluster_name: ext_authz-opa-service
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: ext_authz-opa-service
+                port_value: 9002
+
   - name: podinfo
     connect_timeout: 0.5s
     type: STRICT_DNS
@@ -43,6 +130,7 @@ static_resources:
               socket_address:
                 address: podinfo
                 port_value: 9898
+
   - name: webtop1
     type: STRICT_DNS
     lb_policy: ROUND_ROBIN
@@ -55,6 +143,7 @@ static_resources:
               socket_address:
                 address: webtop1
                 port_value: 3000
+
   - name: webtop2
     type: STRICT_DNS
     lb_policy: ROUND_ROBIN
@@ -67,10 +156,3 @@ static_resources:
               socket_address:
                 address: webtop2
                 port_value: 3000
-
-admin:
-  access_log_path: "/tmp/admin_access.log"
-  address:
-    socket_address:
-      address: 0.0.0.0
-      port_value: 9001
