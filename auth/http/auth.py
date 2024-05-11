@@ -36,7 +36,6 @@ def login():
 
     logging.debug(f'Login successful, current user: {user}')
     response = jsonify({"message": "Authenticated successfully", "user": user})
-    response.headers['x-current-user'] = user
     response.headers['Location'] = next_url  # Using the Location header for redirection
     return response, 302
 
@@ -62,7 +61,6 @@ def before_request():
                 logging.debug(f'Credentials verified for user: {username}')
                 request.user = username
                 response = jsonify(success=True)
-                response.headers['x-current-user'] = username
                 return response, 200
             else:
                 logging.warning(f'Invalid credentials for user: {username}')

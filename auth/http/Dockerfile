@@ -6,7 +6,6 @@ WORKDIR /app
 
 # Copy the current directory contents into the container at /app
 COPY auth.py /app
-COPY auth2.py /app
 
 RUN pip install flask flask-httpauth
 
