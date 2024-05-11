@@ -53,15 +53,15 @@ services:
   podinfo:
     image: stefanprodan/podinfo:latest
     ports:
-      - "9898:9898"
+      - "9898"
     networks:
       - internal
 
   webtop1:
     image: lscr.io/linuxserver/webtop:latest
     restart: unless-stopped
-    ports:
-      - "10001:3000"
+    # ports:
+    #   - "10001:3000"
     networks:
       - internal
     security_opt:
@@ -82,8 +82,8 @@ services:
   webtop2:
     image: lscr.io/linuxserver/webtop:latest
     restart: unless-stopped
-    ports:
-      - "10002:3000"
+    # ports:
+    #   - "10002:3000"
     networks:
       - internal
     security_opt:
