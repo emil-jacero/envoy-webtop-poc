@@ -18,6 +18,10 @@ static_resources:
           "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
           codec_type: AUTO
           stat_prefix: ingress_http
+          access_log:
+            - name: envoy.access_loggers.stdout
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
           upgrade_configs:
           - upgrade_type: websocket
           route_config:
@@ -26,61 +30,80 @@ static_resources:
             - name: local_service
               domains: ["*"]
               routes:
-              - match:
-                  prefix: "/login"
-                route:
-                  cluster: ext_authz-http-service
+              # - name: regex_match
+              #   match:
+              #     safe_regex:
+              #       # regex: "^/([^/]+)/([^/]+)/.*$"
+              #       regex: "^\/([^\/]+)\/([^\/]+)\/.*$"
+              #   route:
+              #     cluster_header: "X-Webtop-Cluster"
+              #     regex_rewrite:
+              #       pattern:
+              #         # regex: "^/([^/]+)/([^/]+)/.*$"
+              #         regex: "^\/([^\/]+)\/([^\/]+)\/.*$"
+              #       substitution: "/\\2/"
+
+              - match: { prefix: "/user1/webtop1/" }
+                route: { cluster: webtop1, prefix_rewrite: "/user1/webtop1/" }
+
+              - match: { prefix: "/user2/webtop2/" }
+                route: { cluster: webtop2, prefix_rewrite: "/user2/webtop2/" }
+
+              - match: { prefix: "/login" }
+                route: { cluster: ext_authz-http-service }
                 typed_per_filter_config:
-                  envoy.filters.http.ext_authz:
+                  envoy.filters.http.ext_authz_authn:
                     "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
                     disabled: true
-              # - match:
-              #     prefix: "/webtop1"
-              #   route:
-              #     cluster: webtop1
-              # - match:
-              #     prefix: "/webtop2"
-              #   route:
-              #     cluster: webtop2
-              - match:
-                  prefix: "/"
-                route:
-                  cluster: podinfo
+                  envoy.filters.http.ext_authz_authz:
+                    "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                    disabled: true
+
+              - match: { prefix: "/podinfo/" }
+                route: { cluster: podinfo, prefix_rewrite: "/" }
+                typed_per_filter_config:
+                  envoy.filters.http.ext_authz_authz:
+                    "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                    disabled: true
+
+              - match: { prefix: "/" }
+                route: { cluster: podinfo }
+                typed_per_filter_config:
+                  envoy.filters.http.ext_authz_authz:
+                    "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                    disabled: true
           http_filters:
-          - name: envoy.filters.http.ext_authz.authn
+          - name: envoy.filters.http.ext_authz_authn
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
               transport_api_version: V3
               allowed_headers:
                 patterns:
                   - exact: "x-current-user"
-                  - exact: "Location"
               http_service:
                 server_uri:
-                  uri: http://authz:5000
+                  uri: authn
                   cluster: ext_authz-http-service
                   timeout: 0.250s
                 authorization_response:
-                  allowed_upstream_headers:
-                    patterns:
-                    - exact: "Location"
-                    - exact: "x-current-user"
                   allowed_client_headers:
                     patterns:
-                    - exact: "Location"
+                    - exact: "asdasdasdasd"
+                  allowed_client_headers_on_success:
+                    patterns:
                     - exact: "x-current-user"
-                # authorization_response:
-                #   allowed_upstream_headers:
-                #     patterns:
-                #     - exact: x-current-user
-          # - name: envoy.filters.http.ext_authz.authz
-          #   typed_config:
-          #     "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
-          #     grpc_service:
-          #       envoy_grpc:
-          #         cluster_name: ext_authz-opa-service
-          #       timeout: 0.250s
-          #     transport_api_version: V3
+          - name: envoy.filters.http.ext_authz_authz
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+              with_request_body:
+                max_request_bytes: 8192
+                allow_partial_message: true
+              failure_mode_allow: false
+              grpc_service:
+                envoy_grpc:
+                  cluster_name: ext_authz-opa-service
+                timeout: 0.250s
+              transport_api_version: V3
           - name: envoy.filters.http.router
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router

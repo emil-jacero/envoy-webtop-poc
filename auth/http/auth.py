@@ -1,6 +1,10 @@
 import base64
 import json
+import logging
 from urllib.parse import urlencode
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 from flask import Flask, jsonify, redirect, request, url_for
 from flask_httpauth import HTTPBasicAuth
@@ -13,49 +17,58 @@ def load_user_file(filepath):
     with open(filepath, 'r') as file:
         return json.load(file)
 
-# Assuming the file path is hardcoded for simplicity; adjust as needed
+# Load users
 users = load_user_file('/etc/users.json')
 
 @auth.verify_password
 def verify_password(username, password):
     if username in users and users[username] == password:
+        logging.debug(f'Authentication successful for user: {username}')
         return username
+    logging.warning(f'Failed authentication attempt for user: {username}')
+    return None
 
 @app.route('/login', methods=['GET'])
 @auth.login_required
 def login():
+    user = auth.current_user()
     next_url = request.args.get('next', '/')
-    response = jsonify({"message": "Authenticated successfully", "user": auth.current_user()})
-    response.headers['x-current-user'] = auth.current_user()
-    response.headers['Location'] = next_url  # Using the Location header for redirection
-    return response, 302  # HTTP status code for redirection
 
-@app.route('/', methods=['GET'])
-def authenticate():
+    logging.debug(f'Login successful, current user: {user}')
+    response = jsonify({"message": "Authenticated successfully", "user": user})
+    response.headers['x-current-user'] = user
+    response.headers['Location'] = next_url  # Using the Location header for redirection
+    return response, 302
+
+@app.before_request
+def before_request():
+    # Skip authentication for login route
+    if request.path == '/login':
+        return
+
     authorization = request.headers.get('Authorization', '')
     if not authorization:
         # Redirect to login and pass the original full URL as a parameter
         query_params = urlencode({"next": request.url})
+        logging.error('No Authorization header provided, Redirecting to login')
         return redirect(url_for('login') + '?' + query_params)
 
-    # Check if the Authorization header starts with Basic
-    print(authorization)
     if authorization.startswith('Basic '):
-        # Extract the base64 encoded string excluding the "Basic " part.
         encoded_credentials = authorization[6:]
-        # Decode the base64 encoded string into bytes and convert bytes to string
-        decoded_credentials = base64.b64decode(encoded_credentials).decode('utf-8')
-        # The username and password are separated by a colon
-        username, password = decoded_credentials.split(':')
-        print(username, password)
-        
-        # Verify the credentials
-        if verify_password(username, password):
-            response = jsonify(success=True)
-            response.headers['x-current-user'] = username
-            return response, 200
-    
-    # If credentials are invalid or not provided correctly
+        try:
+            decoded_credentials = base64.b64decode(encoded_credentials).decode('utf-8')
+            username, password = decoded_credentials.split(':', 1)
+            if verify_password(username, password):
+                logging.debug(f'Credentials verified for user: {username}')
+                request.user = username
+                response = jsonify(success=True)
+                response.headers['x-current-user'] = username
+                return response, 200
+            else:
+                logging.warning(f'Invalid credentials for user: {username}')
+        except (ValueError, TypeError):
+            logging.error('Failed to decode credentials')
+
     return jsonify(error='Forbidden'), 403
 
 if __name__ == "__main__":

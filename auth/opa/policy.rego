@@ -4,28 +4,38 @@ import input.attributes.request.http as http_request
 
 default allow = false
 
-# Extract basic auth username
-basic_auth_user = user {
-    [_, payload] := split(http_request.headers.authorization, " ")
-    [user, _] := split(base64url.decode(payload), ":")
+# Extract the current authenticated user
+current_user = user {
+	[_, payload] := split(http_request.headers.authorization, " ")
+	[user, _] := split(base64url.decode(payload), ":")
 }
 
-# Allow access if the URL path matches the user's namespace and the requested service is in the allowed list
+# Allow access and determine the cluster based on the username and webtop service
 allow {
-    user := basic_auth_user
-    path := split(http_request.path, "/")
-    namespace := path[1]  # Assumes URL format /<username>/<webtop>
+	user := current_user
+	path := split(http_request.path, "/")
+	namespace := path[1] # Assumes URL format /<username>/<webtop>
 
-    user == namespace
-    webtop_service := path[2]
+	user == namespace
+	webtop_service := path[2]
 
-    # Check if the webtop service is one of the allowed services for the user
-    webtop_service == user_webtop_services[user][_]
+	# Check if the webtop service is one of the allowed services for the user
+	webtop_service == user_webtop_clusters[user][_]
 }
 
-# Define allowed webtop services per user as a list
-user_webtop_services = {
-    "user1": ["webtop1", "webtop1a", "webtop1b"],  # user1 can access webtop1, webtop1a, and webtop1b
-    "user2": ["webtop2", "webtop2a"],              # user2 can access webtop2 and webtop2a
-    # Add additional users and their list of services here
+# Decision to emit headers indicating the cluster for routing
+headers = {"X-Webtop-Cluster": webtop_cluster} {
+	user := current_user
+	path := split(http_request.path, "/")
+	namespace := path[1]
+	webtop_service := path[2]
+
+	user == namespace
+	webtop_cluster := user_webtop_clusters[user][webtop_service]
+}
+
+# Define allowed webtop services and corresponding clusters per user
+user_webtop_clusters = {
+	"user1": {"webtop1": "webtop1", "webtop1a": "webtop1a"},
+	"user2": {"webtop2": "webtop2", "webtop2a": "webtop2a"},
 }
