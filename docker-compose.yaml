@@ -1,0 +1,100 @@
+networks:
+  internal:
+    driver: bridge
+
+services:
+  envoy:
+    image: envoyproxy/envoy:v1.30.1
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml
+      - ./envoy_access.log:/envoy_access.log
+    ports:
+      - "10000:10000"
+      - "9001:9001"
+    depends_on:
+      - ext_authz-http-service
+      - ext_authz-opa-service
+    networks:
+      - internal
+
+  ext_authz-http-service:
+    build:
+      context: ./auth/http
+      dockerfile: Dockerfile
+    volumes:
+      - ./users.json:/etc/users.json
+    ports:
+      - "5000:5000"
+    networks:
+      internal:
+        aliases:
+          - authn
+
+  ext_authz-opa-service:
+    build:
+      context: ./auth/opa
+      dockerfile: Dockerfile
+    volumes:
+      - ./auth/opa/policy.rego:/etc/policy.rego 
+    command:
+      - run
+      - --server
+      - --log-format=json-pretty
+      - --set=plugins.envoy_ext_authz_grpc.addr=:9002
+      - --set=decision_logs.console=true
+      - /etc/policy.rego
+    networks:
+      internal:
+        aliases:
+          - authz
+
+  podinfo:
+    image: stefanprodan/podinfo:latest
+    ports:
+      - "9898:9898"
+    networks:
+      - internal
+
+  webtop1:
+    image: lscr.io/linuxserver/webtop:latest
+    restart: unless-stopped
+    ports:
+      - "10001:3000"
+    networks:
+      - internal
+    security_opt:
+      - seccomp:unconfined #optional
+    # devices:
+    #   - /dev/dri:/dev/dri #optional
+    shm_size: "1gb" #optional
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Stockholm
+      - SUBFOLDER=/user1/webtop1/
+      - TITLE=Webtop
+    volumes:
+      - ./webtop1:/config
+      - /var/run/docker.sock:/var/run/docker.sock #optional
+
+  webtop2:
+    image: lscr.io/linuxserver/webtop:latest
+    restart: unless-stopped
+    ports:
+      - "10002:3000"
+    networks:
+      - internal
+    security_opt:
+      - seccomp:unconfined #optional
+    # devices:
+    #   - /dev/dri:/dev/dri #optional
+    shm_size: "1gb" #optional
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Stockholm
+      - SUBFOLDER=/user2/webtop2/
+      - TITLE=Webtop
+    volumes:
+      - ./webtop2:/config
+      - /var/run/docker.sock:/var/run/docker.sock #optional
