@@ -1,0 +1,18 @@
+{
+"users": {
+    "user1": {
+        "password": "password1",
+        "clusters": [
+            "webtop1",
+            "webtop1a"
+        ]
+    },
+    "user2": {
+        "password": "password2",
+        "clusters": [
+            "webtop2",
+            "webtop2a"
+        ]
+    }
+}
+}

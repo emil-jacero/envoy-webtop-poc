@@ -22,7 +22,7 @@ services:
       context: ./auth/http
       dockerfile: Dockerfile
     volumes:
-      - ./users.json:/etc/users.json
+      - ./data/data.json:/etc/data.json
     ports:
       - "5000:5000"
     networks:
@@ -36,8 +36,10 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./auth/opa/policy.rego:/etc/policy.rego 
+      - ./data/data.json:/data/data.json
     command:
       - run
+      - /data/data.json
       - --server
       - --log-format=json-pretty
       - --set=plugins.envoy_ext_authz_grpc.addr=:9002

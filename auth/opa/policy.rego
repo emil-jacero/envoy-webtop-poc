@@ -1,41 +1,42 @@
 package envoy.authz
 
-import input.attributes.request.http as http_request
+import rego.v1
 
-default allow = false
+import data.users
 
-# Extract the current authenticated user
-current_user = user {
-	[_, payload] := split(http_request.headers.authorization, " ")
-	[user, _] := split(base64url.decode(payload), ":")
+default allow := false
+
+default headers := {}
+
+# Function to parse the Basic Auth header and extract the username
+basic_auth_user := user if {
+	[_, payload] := split(input.attributes.request.http.headers.authorization, " ")
+	decoded := base64url.decode(payload)
+	[user, _] := split(decoded, ":")
 }
 
-# Allow access and determine the cluster based on the username and webtop service
-allow {
-	user := current_user
-	path := split(http_request.path, "/")
-	namespace := path[1] # Assumes URL format /<username>/<webtop>
-
-	user == namespace
-	webtop_service := path[2]
-
-	# Check if the webtop service is one of the allowed services for the user
-	webtop_service == user_webtop_clusters[user][_]
+allow if {
+	user := basic_auth_user
+	is_user_valid[user]
 }
 
-# Decision to emit headers indicating the cluster for routing
-headers = {"X-Webtop-Cluster": webtop_cluster} {
-	user := current_user
-	path := split(http_request.path, "/")
-	namespace := path[1]
-	webtop_service := path[2]
+# Validate user by matching extracted user with the namespace in the path
+is_user_valid[user] if {
+	user := basic_auth_user
+    path := split(input.attributes.request.http.path, "/")
+	namespace := path[1] # Assume URL format is /<username>/<resource>
+	resource := path[2] # Assume URL format is /<username>/<resource>
 
-	user == namespace
-	webtop_cluster := user_webtop_clusters[user][webtop_service]
+	# Ensure the extracted user has an entry in the users object
+	# and the namespace from URL matches this user
+	users[user] != null
+	user == namespace  # Check if the user matches the namespace path
+    resource in users[user].clusters  # Check if the resource exists in the cluster list
 }
 
-# Define allowed webtop services and corresponding clusters per user
-user_webtop_clusters = {
-	"user1": {"webtop1": "webtop1", "webtop1a": "webtop1a"},
-	"user2": {"webtop2": "webtop2", "webtop2a": "webtop2a"},
+# Add headers if the request is allowed
+headers := {"X-Resource-Cluster": resource} if {
+	allow
+	path := split(input.attributes.request.http.path, "/")
+	resource := path[2] # Extract the resource part from the path
 }

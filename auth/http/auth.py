@@ -15,14 +15,15 @@ auth = HTTPBasicAuth()
 # Load users from a JSON file
 def load_user_file(filepath):
     with open(filepath, 'r') as file:
-        return json.load(file)
+        data = json.load(file)
+    return data["users"] 
 
 # Load users
-users = load_user_file('/etc/users.json')
+users = load_user_file('/etc/data.json')
 
 @auth.verify_password
 def verify_password(username, password):
-    if username in users and users[username] == password:
+    if username in users and users[username]["password"] == password:
         logging.debug(f'Authentication successful for user: {username}')
         return username
     logging.warning(f'Failed authentication attempt for user: {username}')

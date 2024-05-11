@@ -36,7 +36,7 @@ static_resources:
               #       # regex: "^/([^/]+)/([^/]+)/.*$"
               #       regex: "^\/([^\/]+)\/([^\/]+)\/.*$"
               #   route:
-              #     cluster_header: "X-Webtop-Cluster"
+              #     cluster_header: "X-Resource-Cluster"
               #     regex_rewrite:
               #       pattern:
               #         # regex: "^/([^/]+)/([^/]+)/.*$"
@@ -45,9 +45,13 @@ static_resources:
 
               - match: { prefix: "/user1/webtop1/" }
                 route: { cluster: webtop1, prefix_rewrite: "/user1/webtop1/" }
+              - match: { prefix: "/user1/webtop2/" }
+                route: { cluster: webtop1, prefix_rewrite: "/user1/webtop1/" }
 
               - match: { prefix: "/user2/webtop2/" }
                 route: { cluster: webtop2, prefix_rewrite: "/user2/webtop2/" }
+              - match: { prefix: "/user2/webtop1/" }
+                route: { cluster: webtop1, prefix_rewrite: "/user1/webtop1/" }
 
               - match: { prefix: "/login" }
                 route: { cluster: ext_authz-http-service }
