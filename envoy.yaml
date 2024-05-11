@@ -77,21 +77,11 @@ static_resources:
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
               transport_api_version: V3
-              allowed_headers:
-                patterns:
-                  - exact: "x-current-user"
               http_service:
                 server_uri:
                   uri: authn
                   cluster: ext_authz-http-service
                   timeout: 0.250s
-                authorization_response:
-                  allowed_client_headers:
-                    patterns:
-                    - exact: "asdasdasdasd"
-                  allowed_client_headers_on_success:
-                    patterns:
-                    - exact: "x-current-user"
           - name: envoy.filters.http.ext_authz_authz
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
